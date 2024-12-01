@@ -1,0 +1,39 @@
+{
+  "name": "webook-telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for Webook events",
+  "main": "src/app.js",
+  "scripts": {
+    "lint:warn": "eslint src/**/*.js --quiet --max-warnings 100",
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write \"src/**/*.js\""
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "webook",
+    "events"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "axios": "^1.7.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "lodash": "^4.17.21",
+    "luxon": "^3.5.0",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "prisma": "^6.0.0"
+  }
+}

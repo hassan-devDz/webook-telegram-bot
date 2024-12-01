@@ -13,7 +13,7 @@ datasource db {
 model User {
   id            Int       @id @default(autoincrement())
   telegramId    String    @unique
-  username      String?    // جعلناه اختياري لأن بعض مستخدمي تلغرام ليس لديهم اسم مستخدم
+    username      String?    // جعلناه اختياري لأن بعض مستخدمي تلغرام ليس لديهم اسم مستخدم
   firstName     String     // اسم المستخدم الأول إلزامي
   lastName      String?    // اسم العائلة اختياري
   languageCode  String?    // لغة المستخدم
