@@ -1,0 +1,790 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  telegramId    String    @unique
+    username      String?    // جعلناه اختياري لأن بعض مستخدمي تلغرام ليس لديهم اسم مستخدم
+  firstName     String     // اسم المستخدم الأول إلزامي
+  lastName      String?    // اسم العائلة اختياري
+  languageCode  String?    // لغة المستخدم
+
+  name          String
+  email         String?   @unique
+  phoneNumber   String?
+  password      String?   // Hashed password for booking
+  isSubscribed  Boolean   @default(false)
+  balance       Decimal   @db.Decimal(10, 2)
+  totalReferred Int       @default(0)
+  referralCode  String    @unique
+  referredById  Int?
+  isBlocked     Boolean   @default(false)
+  metadata      Json?     // Store additional user data
+    // الأوقات
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastActivity  DateTime?
+  lastLogin     DateTime?
+
+  // Admin-related fields
+  isAdmin       Boolean   @default(false)
+  adminRole     AdminRole?
+  
+  // Relationships
+  referredBy    User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals     User[]    @relation("Referrals")
+  subscriptions Subscription[]
+  preferences   UserPreference?
+  transactions  Transaction[]
+  notifications Notification[]
+  bookings      Booking[]
+  sentTransfers BalanceTransfer[] @relation("SentTransfers")
+  receivedTransfers BalanceTransfer[] @relation("ReceivedTransfers")
+  supportTickets SupportTicket[]
+  ticketMessages TicketMessage[]
+  messageRecipients MessageRecipient[]
+  referralRewards ReferralReward[]
+  adminActions  AdminAction[]
+  botSettings   BotSetting[]
+  bannedBy      UserBan?
+    usedPromotions PromotionUse[]
+  createdPromotions Promotion[]
+  usedCodes     SubscriptionCode[] @relation("UsedCodes")
+  createdCodes  SubscriptionCode[] @relation("CreatedCodes")
+
+
+  @@index([telegramId])
+  @@index([referralCode])
+  @@index([adminRole])
+}
+
+
+model ReferralReward {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  referredUserId Int
+  amount        Decimal   @db.Decimal(10, 2)
+  status        RewardStatus
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model BalanceTransfer {
+  id            Int       @id @default(autoincrement())
+  fromUserId    Int
+  toUserId      Int
+  amount        Decimal   @db.Decimal(10, 2)
+  status        TransferStatus
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  sender        User      @relation("SentTransfers", fields: [fromUserId], references: [id])
+  receiver      User      @relation("ReceivedTransfers", fields: [toUserId], references: [id])
+
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model Booking {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  eventId       Int
+  quantity      Int       @default(1)
+  totalAmount   Decimal   @db.Decimal(10, 2)
+  bookingReference String @unique
+  status        BookingStatus
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+  event         Event     @relation(fields: [eventId], references: [id])
+  tickets       Ticket[]
+  subscriptionUsage SubscriptionUsage[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([eventId])
+}
+
+model Ticket {
+  id            Int       @id @default(autoincrement())
+  bookingId     Int
+  ticketNumber  String    @unique
+  status        TicketStatus
+  price         Decimal   @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+}
+
+model SupportTicket {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  subject       String
+  status        TicketStatus
+  priority      TicketPriority
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+  messages      TicketMessage[]
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model TicketMessage {
+  id            Int       @id @default(autoincrement())
+  ticketId      Int
+  userId        Int
+  message       String    @db.Text
+  isStaff       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+}
+
+model AdminMessage {
+  id            Int       @id @default(autoincrement())
+  title         String
+  content       String    @db.Text
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  recipients    MessageRecipient[]
+}
+
+model MessageRecipient {
+  id            Int       @id @default(autoincrement())
+  messageId     Int
+  userId        Int
+  isRead        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  message       AdminMessage @relation(fields: [messageId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([messageId])
+  @@index([userId])
+}
+
+
+
+
+model Subscription {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  planId          Int
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean   @default(true)
+  status          SubscriptionStatus @default(ACTIVE)
+  
+  // Payment and pricing details
+  amount          Decimal   @db.Decimal(10, 2)
+  promotionId     Int?
+  discountAmount  Decimal?  @db.Decimal(10, 2)
+  finalAmount     Decimal   @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod    // DIRECT, CODE, ADMIN
+
+  // Usage tracking
+  eventsRemaining Int?      // Remaining events this period
+  bookingsRemaining Int?    // Remaining bookings this period
+  
+  // Subscription details
+  autoRenew       Boolean   @default(false)
+  renewedFrom     Int?      // ID of previous subscription if renewed
+  cancelReason    String?   @db.Text
+  cancelledAt     DateTime?
+  
+  // Code usage if subscribed with code
+  subscriptionCodeId Int?
+  
+  // Metadata
+  metadata        Json?     // Additional subscription data
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relationships
+  user            User      @relation(fields: [userId], references: [id])
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  promotion       Promotion? @relation(fields: [promotionId], references: [id])
+  subscriptionCode SubscriptionCode? @relation(fields: [subscriptionCodeId], references: [id])
+  previousSubscription Subscription? @relation("RenewalHistory", fields: [renewedFrom], references: [id])
+  renewals        Subscription[] @relation("RenewalHistory")
+  usageHistory    SubscriptionUsage[]
+
+  @@index([userId])
+  @@index([planId])
+  @@map("subscriptions")
+}
+
+model SubscriptionUsage {
+  id              Int       @id @default(autoincrement())
+  subscriptionId  Int
+  type            UsageType
+  eventId         Int?      // If usage is related to specific event
+  bookingId       Int?      // If usage is related to specific booking
+  usedAt          DateTime  @default(now())
+  
+  // Relationships
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  event           Event?    @relation(fields: [eventId], references: [id])
+  booking         Booking?  @relation(fields: [bookingId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("subscription_usage")
+}
+
+
+model UserPreference {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  allNotifications Boolean @default(true)
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+  categories    CategoryPreference[]
+  areas         AreaPreference[]
+  classifications ClassificationPreference[]
+}
+
+model Category {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  
+  // Relationships
+  planAccess    PlanCategoryAccess[]
+  promotions    PromotionCategory[]
+  preferences   CategoryPreference[]
+  events        Event[]
+}
+
+model CategoryPreference {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  categoryId    Int
+  
+  // Relationships
+  preference    UserPreference @relation(fields: [userId], references: [userId])
+  category      Category    @relation(fields: [categoryId], references: [id])
+
+  @@unique([userId, categoryId])
+}
+
+model Area {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  
+  // Relationships
+  planAccess    PlanAreaAccess[]
+  promotions    PromotionArea[]
+
+  preferences   AreaPreference[]
+  events        Event[]
+}
+
+model AreaPreference {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  areaId        Int
+  
+  // Relationships
+  preference    UserPreference @relation(fields: [userId], references: [userId])
+  area          Area       @relation(fields: [areaId], references: [id])
+
+  @@unique([userId, areaId])
+}
+
+model Classification {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  
+  // Relationships
+  preferences   ClassificationPreference[]
+  events        Event[]
+}
+
+model ClassificationPreference {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  classificationId Int
+  
+  // Relationships
+  preference    UserPreference @relation(fields: [userId], references: [userId])
+  classification Classification @relation(fields: [classificationId], references: [id])
+
+  @@unique([userId, classificationId])
+}
+
+model Event {
+  id            Int       @id @default(autoincrement())
+  name          String
+  description   String    @db.Text
+  bookingLink   String?
+  price         Decimal   @db.Decimal(10, 2)
+  availableTickets Int
+  categoryId    Int
+  areaId        Int
+  classificationId Int
+  startDate     DateTime
+  endDate       DateTime
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  category      Category    @relation(fields: [categoryId], references: [id])
+  area          Area        @relation(fields: [areaId], references: [id])
+  classification Classification @relation(fields: [classificationId], references: [id])
+  notifications Notification[]
+  subscriptionUsage SubscriptionUsage[]
+
+  bookings      Booking[]
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
+  metadata      Json?     // Additional event data
+
+  @@index([categoryId])
+  @@index([areaId])
+  @@index([classificationId])
+}
+
+model Transaction {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  amount        Decimal   @db.Decimal(10, 2)
+  type          TransactionType
+  status        TransactionStatus
+  reference     String?   @unique
+  description   String?
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model Notification {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  eventId       Int
+  isSent        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+  event         Event     @relation(fields: [eventId], references: [id])
+
+  @@index([userId])
+  @@index([eventId])
+}
+
+
+model AdminAction {
+  id            Int       @id @default(autoincrement())
+  userId        Int      // Changed from adminId
+  actionType    AdminActionType
+  entityType    EntityType
+  entityId      Int
+  description   String
+  metadata      Json?    // Store additional action details
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([actionType])
+  @@index([entityType])
+}
+
+
+model BotSetting {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique
+  value         String
+  type          SettingType
+  description   String?
+  userId        Int      // Changed from adminId
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  allowDirectPayment Boolean @default(true)
+  allowCodePayment  Boolean @default(true)
+  referralReward    Decimal @default(0)
+
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([key])
+}
+
+
+model UserBan {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  reason        String
+  bannedUntil   DateTime?
+  isPermenant   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  
+  // Relationships
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+model Statistics {
+  id            Int       @id @default(autoincrement())
+  date          DateTime  @unique
+  newUsers      Int       @default(0)
+  activeUsers   Int       @default(0)
+  totalRevenue  Decimal   @db.Decimal(10, 2)
+  totalBookings Int       @default(0)
+  totalEvents   Int       @default(0)
+  metadata      Json?     // Additional statistics
+  createdAt     DateTime  @default(now())
+
+  @@index([date])
+}
+model SubscriptionPlan {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String   @db.Text
+  type            PlanType     // MONTHLY or PER_EVENT
+  duration        Int?         // للاشتراك الشهري (بالأيام)
+  durationMonths  Int
+  notifyOnly      Boolean   @default(false)  // هل هو للتنبيه فقط
+  allowBooking    Boolean   @default(true)   // هل يسمح بالحجز
+  maxEvents       Int?      // عدد الفعاليات المسموح بها
+
+  price           Decimal  @db.Decimal(10, 2)
+  features        Json     // Store plan features
+  maxBookings     Int      @default(0)  // Maximum bookings per month
+  isActive        Boolean  @default(true)
+  displayOrder    Int      @default(0)
+  metadata        Json?    // Additional plan settings
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  subscriptions   Subscription[]
+  promotions      Promotion[]
+  subscriptionCodes SubscriptionCode[]
+  categoryAccess  PlanCategoryAccess[]
+  areaAccess      PlanAreaAccess[]
+
+  @@map("subscription_plans")
+}
+
+model PlanCategoryAccess {
+  id              Int      @id @default(autoincrement())
+  planId          Int
+  categoryId      Int
+  
+  // Relationships
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  category       Category    @relation(fields: [categoryId], references: [id])
+
+  @@unique([planId, categoryId])
+  @@map("plan_category_access")
+}
+
+model PlanAreaAccess {
+  id              Int      @id @default(autoincrement())
+  planId          Int
+  areaId          Int
+  
+  // Relationships
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  area           Area        @relation(fields: [areaId], references: [id])
+
+  @@unique([planId, areaId])
+  @@map("plan_area_access")
+}
+
+model Promotion {
+  id              Int      @id @default(autoincrement())
+  name            String
+  code            String   @unique
+  type            PromoType
+  value           Decimal  @db.Decimal(10, 2)
+  isPercentage    Boolean  @default(true)
+  startDate       DateTime
+  endDate         DateTime
+  maxUses         Int?
+  currentUses     Int      @default(0)
+  planId          Int?
+  isActive        Boolean  @default(true)
+  description     String   @db.Text
+  minPurchaseAmount Decimal? @db.Decimal(10, 2)
+  maxDiscountAmount Decimal? @db.Decimal(10, 2)
+  userType        UserType? // For targeting specific user types
+  metadata        Json?    // Additional promo settings
+  
+  // Relationships
+  plan           SubscriptionPlan? @relation(fields: [planId], references: [id])
+  usageHistory   PromotionUse[]
+  categories     PromotionCategory[]
+  areas          PromotionArea[]
+    subscriptions   Subscription[]
+
+
+  // Tracking
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      Int
+  creator        User     @relation(fields: [createdBy], references: [id])
+
+  @@index([code])
+  @@map("promotions")
+}
+
+model PromotionCategory {
+  id              Int      @id @default(autoincrement())
+  promotionId     Int
+  categoryId      Int
+
+  // Relationships
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+  category       Category  @relation(fields: [categoryId], references: [id])
+
+  @@unique([promotionId, categoryId])
+  @@map("promotion_categories")
+}
+
+model PromotionArea {
+  id              Int      @id @default(autoincrement())
+  promotionId     Int
+  areaId          Int
+
+  // Relationships
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+  area           Area      @relation(fields: [areaId], references: [id])
+
+  @@unique([promotionId, areaId])
+  @@map("promotion_areas")
+}
+
+model PromotionUse {
+  id              Int      @id @default(autoincrement())
+  promotionId     Int
+  userId          Int
+  usedAt          DateTime @default(now())
+  originalAmount  Decimal  @db.Decimal(10, 2)
+  discountAmount  Decimal  @db.Decimal(10, 2)
+  finalAmount     Decimal  @db.Decimal(10, 2)
+
+  // Relationships
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+  user           User      @relation(fields: [userId], references: [id])
+
+  @@map("promotion_uses")
+}
+
+model SubscriptionCode {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  planId          Int
+  isUsed          Boolean  @default(false)
+  expiresAt       DateTime
+  usedBy          Int?
+  maxUses         Int?     // عدد مرات الاستخدام المسموح
+  currentUses     Int      @default(0)
+
+  usedAt          DateTime?
+  durationMonths  Int?     // Override plan duration
+  maxEvents       Int?     // Override plan event limit
+  maxBookings     Int?     // Override plan booking limit
+  metadata        Json?    // Additional code settings
+
+  // Relationships
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  user           User?     @relation("UsedCodes", fields: [usedBy], references: [id])
+    subscriptions   Subscription[]
+
+  // Tracking
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      Int
+  creator        User     @relation("CreatedCodes", fields: [createdBy], references: [id])
+
+  @@index([code])
+  @@map("subscription_codes")
+}
+enum SubscriptionStatus {
+  PENDING         // Awaiting payment/activation
+  ACTIVE          // Currently active
+  SUSPENDED       // Temporarily suspended
+  CANCELLED       // Cancelled by user
+  EXPIRED         // Naturally expired
+  FAILED          // Failed renewal
+}
+
+enum UsageType {
+  EVENT_VIEW      // Viewing event details
+  EVENT_BOOKMARK  // Bookmarking event
+  BOOKING         // Making a booking
+  NOTIFICATION    // Receiving notification
+}
+
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+  SUPPORT
+  ANALYST
+}
+
+enum AdminActionType {
+  CREATE
+  UPDATE
+  DELETE
+  BLOCK
+  UNBLOCK
+  PUBLISH
+  UNPUBLISH
+  APPROVE
+  REJECT
+  SETTINGS_UPDATE
+  LOGIN
+  LOGOUT
+}
+
+enum EntityType {
+  USER
+  EVENT
+  BOOKING
+  TRANSACTION
+  SUBSCRIPTION
+  SUPPORT_TICKET
+  BOT_SETTING
+  CATEGORY
+  AREA
+  CLASSIFICATION
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  DATETIME
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  SUBSCRIPTION
+  BOOKING
+  REFERRAL_REWARD
+  TRANSFER_SENT
+  TRANSFER_RECEIVED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  FAILED
+}
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+  EXPIRED
+}
+
+enum RewardStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+enum PromoType {
+  WELCOME         // Welcome offer
+  DISCOUNT        // Regular discount
+  SPECIAL_OFFER   // Special offer
+  SEASONAL        // Seasonal promotion
+  HOLIDAY         // Holiday promotion
+  REFERRAL        // Referral bonus
+  LOYALTY         // Loyalty reward
+  FLASH_SALE      // Limited time offer
+  BUNDLE          // Bundle deal
+  WIN_BACK        // Win-back promotion
+}
+
+enum UserType {
+  ALL            // All users
+  NEW            // New users only
+  EXISTING       // Existing users only
+  INACTIVE       // Inactive users
+  VIP            // VIP users
+}
+enum PlanType {
+  MONTHLY         // اشتراك شهري
+  PER_EVENT       // اشتراك لكل فعالية
+}
+
+enum PaymentMethod {
+  DIRECT          // دفع مباشر
+  CODE            // استخدام كود
+  ADMIN           // تفعيل من الأدمن
+}
+
+
