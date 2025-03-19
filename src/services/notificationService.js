@@ -106,12 +106,23 @@ class NotificationService {
     try {
       const { message, keyboard } = this.formatEventMessageWithImage(event);
 
-      // إرسال الرسالة مع الصورة
-      await bot.telegram.sendPhoto(userId, event.metadata.imageUrl, {
-        caption: message,
-        parse_mode: "HTML",
-        reply_markup: keyboard,
-      });
+      try {
+        // محاولة إرسال صورة
+        await bot.telegram.sendPhoto(userId, event.metadata.imageUrl, {
+          caption: message,
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        });
+      } catch (photoError) {
+        logger.warn(
+          `Failed to send photo for event ${event.id}, falling back to text: ${photoError.message}`
+        );
+        // خطة بديلة: إرسال رسالة نصية فقط
+        await bot.telegram.sendMessage(userId, message, {
+          parse_mode: "HTML",
+          reply_markup: keyboard,
+        });
+      }
 
       await this.logNotification({
         userId,
@@ -147,7 +158,16 @@ class NotificationService {
       month: "long",
       day: "numeric",
     });
+    // تنسيق التاريخ الميلادي
+    const gregorianDateRange = startDate.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
+    // تجميع التواريخ مع رسالة "الموافق"
+    const fullDateRange = `${dateRange} الموافق ${gregorianDateRange}`;
     const timeRange = `${startDate.toLocaleTimeString("ar-SA", {
       hour: "2-digit",
       minute: "2-digit",
@@ -159,7 +179,7 @@ class NotificationService {
     const message = `🎭 <b>${event.name}</b>
 
 ${event.description ? `💭 ${event.description}\n` : ""}
-📅 <b>الموعد:</b> ${dateRange}
+📅 <b>الموعد:</b> ${fullDateRange}
 ⏰ <b>الوقت:</b> ${timeRange}
 📍 <b>المكان:</b> ${event.metadata.locationTitle}
 💰 <b>السعر:</b> ${event.price} ${event.metadata.currencyCode}`.trim();
@@ -285,9 +305,19 @@ ${event.description ? `💭 ${event.description}\n` : ""}
     errorMessage = null,
   }) {
     try {
+      // تحويل userId إلى int
+      //const parsedUserId = parseInt(userId, 10);
+      const user = await prisma.user.findUnique({
+        where:{
+          telegramId:userId
+        }
+      })
+      // التحقق من أن userId صالح (غير NaN)
+    
+
       await prisma.notification.create({
         data: {
-          userId,
+          userId:user.id, // تمرير القيمة المحولة
           eventId,
           type,
           subType,

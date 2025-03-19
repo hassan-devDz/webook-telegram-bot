@@ -397,14 +397,21 @@ model Transaction {
 model Notification {
   id            Int       @id @default(autoincrement())
   userId        Int
-  eventId       Int
+  eventId       Int?      // جعله اختياريًا (nullable) لأنك تمرر null في بعض الحالات
   isSent        Boolean   @default(false)
   createdAt     DateTime  @default(now())
   
-  // Relationships
+  // إضافة الحقول الجديدة
+  type          String    // نوع الإشعار (event, subscription, admin)
+  subType       String?   // نوع فرعي (اختياري)
+  success       Boolean   // هل تم الإرسال بنجاح
+  errorMessage  String?   // رسالة الخطأ (اختيارية)
+  sentAt        DateTime  // وقت الإرسال
+  
+  // العلاقات
   user          User      @relation(fields: [userId], references: [id])
-  event         Event     @relation(fields: [eventId], references: [id])
-
+  event         Event?    @relation(fields: [eventId], references: [id])  // جعل العلاقة اختيارية
+  
   @@index([userId])
   @@index([eventId])
 }
